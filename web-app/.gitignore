@@ -2,6 +2,7 @@
 Ollama/ollama.exe
 Ollama/ollama app.exe
 Ollama/unins000.exe
+Ollama/lib/ollama/cuda_v12/ggml-cuda.dll
 
 # Existing rules
 node_modules
