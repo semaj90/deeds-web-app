@@ -262,7 +262,7 @@ class EnhancedLokiDB {
       updatedAt: new Date(),
       accessCount: 0,
       lastAccess: new Date(),
-      contentHash: await this.generateContentHash(evidence.content)
+      contentHash: await this.generateContentHash(evidence.description || evidence.title || '')
     };
 
     const existing = col.findOne({ id: evidence.id });

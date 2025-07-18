@@ -4,10 +4,10 @@ import { writable, derived, get } from "svelte/store";
 import { browser } from "$app/environment";
 import type {
   AIResponse,
-  ConversationHistory,
   Gemma3Config,
   LocalModel,
 } from "$lib/data/types";
+import type { ConversationHistory } from "$lib/types/api";
 
 // SSR-safe storage utilities
 const SSR_SAFE_STORAGE = {

@@ -3,7 +3,7 @@
 // Building on existing autoTaggingMachine with advanced capabilities
 // ======================================================================
 
-import { assign, createMachine, fromPromise, setup, sendTo } from 'xstate';
+import { assign, createMachine, fromPromise, setup, sendTo, createActor } from 'xstate';
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 
@@ -147,7 +147,7 @@ export const evidenceProcessingMachine = setup({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-              content: input.evidence.content,
+              content: input.evidence.description || input.evidence.title,
               model: 'nomic-embed-text' // Your local embedding model
             })
           }),
@@ -369,7 +369,7 @@ export const evidenceProcessingMachine = setup({
                   id: crypto.randomUUID(),
                   evidenceId: context.evidenceQueue[0]?.id,
                   type: 'ai_model',
-                  message: event.error.message,
+                  message: (event.error as Error)?.message || 'Unknown error',
                   details: event.error,
                   timestamp: new Date(),
                   resolved: false,
@@ -408,7 +408,7 @@ export const evidenceProcessingMachine = setup({
                   id: crypto.randomUUID(),
                   evidenceId: context.evidenceQueue[0]?.id,
                   type: 'vector_search',
-                  message: event.error.message,
+                  message: (event.error as Error)?.message || 'Unknown error',
                   details: event.error,
                   timestamp: new Date(),
                   resolved: false,
@@ -445,7 +445,7 @@ export const evidenceProcessingMachine = setup({
                   id: crypto.randomUUID(),
                   evidenceId: context.evidenceQueue[0]?.id,
                   type: 'graph_discovery',
-                  message: event.error.message,
+                  message: (event.error as Error)?.message || 'Unknown error',
                   details: event.error,
                   timestamp: new Date(),
                   resolved: false,
@@ -769,10 +769,10 @@ export async function initializeEnhancedMachines() {
 
   try {
     // Create evidence processing machine
-    const evidenceActor = evidenceProcessingMachine.createActor();
+    const evidenceActor = createActor(evidenceProcessingMachine);
     
     // Create streaming machine
-    const streamingActor = streamingMachine.createActor();
+    const streamingActor = createActor(streamingMachine);
     
     // Subscribe to state changes
     evidenceActor.subscribe((state) => {
