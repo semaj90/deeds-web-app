@@ -11,6 +11,7 @@
   import { createSelect, melt } from "@melt-ui/svelte";
   
   export let evidence: Evidence | null = null;
+  export let data: any = null;
 
   const dispatch = createEventDispatcher();
 

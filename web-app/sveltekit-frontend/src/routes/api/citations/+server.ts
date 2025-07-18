@@ -56,15 +56,16 @@ function isDemoCase(caseId: string): boolean {
   return caseId === "demo-case-123" || caseId.startsWith("demo-");
 }
 export async function GET({ url }: RequestEvent) {
+  const caseId = url.searchParams.get("caseId");
+  const reportId = url.searchParams.get("reportId");
+  const type = url.searchParams.get("type");
+  const search = url.searchParams.get("search");
+  const bookmarked = url.searchParams.get("bookmarked");
+  const recent = url.searchParams.get("recent");
+  const limit = parseInt(url.searchParams.get("limit") || "10");
+  const offset = parseInt(url.searchParams.get("offset") || "0");
+
   try {
-    const caseId = url.searchParams.get("caseId");
-    const reportId = url.searchParams.get("reportId");
-    const type = url.searchParams.get("type");
-    const search = url.searchParams.get("search");
-    const bookmarked = url.searchParams.get("bookmarked");
-    const recent = url.searchParams.get("recent");
-    const limit = parseInt(url.searchParams.get("limit") || "10");
-    const offset = parseInt(url.searchParams.get("offset") || "0");
 
     // Handle demo cases or when database is not available
     if (!db || (caseId && isDemoCase(caseId))) {

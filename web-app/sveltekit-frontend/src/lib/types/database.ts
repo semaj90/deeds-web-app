@@ -2,8 +2,6 @@ import type { User } from "$lib/types/user";
 
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
-import type { Case } from "$lib/types";
-
 import {
   cases,
   criminals,

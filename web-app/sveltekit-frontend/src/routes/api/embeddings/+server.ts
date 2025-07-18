@@ -9,6 +9,16 @@ import {
 // TODO: Implement syncDocumentEmbeddings function
 // import { syncDocumentEmbeddings } from '$lib/server/ai/embeddings';
 
+// Temporary fallback function
+async function syncDocumentEmbeddings(
+  type: string,
+  limit: number,
+  forceRegenerate: boolean,
+): Promise<{ total: number; updated: number; errors: number }> {
+  console.warn(`syncDocumentEmbeddings not implemented for type: ${type}`);
+  return { total: 0, updated: 0, errors: 0 };
+}
+
 // Single embedding request
 interface EmbeddingRequest {
   text: string;

@@ -485,7 +485,8 @@
       if ((e.key === "Enter" || e.key === " ") && !disabled) {
         e.preventDefault();
         fileInput.click();}
-    "
+      }
+    }}
   >
     <div class="container mx-auto px-4">
       <div class="container mx-auto px-4">

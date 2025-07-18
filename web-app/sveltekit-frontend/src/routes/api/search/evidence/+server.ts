@@ -108,8 +108,7 @@ async function searchEvidenceText(query: string, options: any) {
       uploadedAt: evidence.uploadedAt,
       similarity: sql<number>`1.0`,
       searchType: sql<string>`'text'`,
-    ;
-}
+    })
     .from(evidence)
     .where(and(...whereConditions))
     .orderBy(desc(evidence.uploadedAt))
@@ -138,7 +137,7 @@ async function searchEvidenceContent(query: string, options: any) {
 
     if (evidenceIds.length === 0) {
       return [];
-}
+    }
     const evidenceRecords = await db
       .select({
         id: evidence.id,
