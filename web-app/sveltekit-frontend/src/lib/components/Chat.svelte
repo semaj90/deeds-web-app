@@ -1,4 +1,4 @@
-import type { User } from '$lib/types/user';
+import type { User } from '$lib/types';
 
 <script lang="ts">
   import { afterUpdate, createEventDispatcher, onMount, tick } from "svelte";

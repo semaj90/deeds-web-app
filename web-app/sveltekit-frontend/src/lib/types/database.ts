@@ -1,5 +1,3 @@
-import type { User } from "$lib/types/user";
-
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 
 import {
@@ -19,7 +17,7 @@ export type NewCriminal = InferInsertModel<typeof criminals>;
 export type Evidence = InferSelectModel<typeof evidence>;
 export type NewEvidence = InferInsertModel<typeof evidence>;
 
-export type User = InferSelectModel<typeof users>;
+export type DatabaseUser = InferSelectModel<typeof users>;
 export type NewUser = InferInsertModel<typeof users>;
 
 // Define Profile and Session types manually since they may not be in the schema
@@ -115,12 +113,15 @@ export interface CaseWithRelations extends Case {
   documents?: any[];
 }
 // User with profile
-export interface UserWithProfile extends User {
+export interface UserWithProfile {
+  id: string;
+  email: string;
+  name: string;
   profile?: Profile;
 }
 // Evidence with metadata (using intersection to avoid conflicts)
 export interface EvidenceWithMetadata extends Omit<Evidence, "uploadedBy"> {
-  uploadedBy?: User; // Replace string ID with full User object
+  uploadedBy?: UserWithProfile; // Replace string ID with full User object
   uploadedById?: string; // Keep the original ID for reference
 
   case?: Case;
