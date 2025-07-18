@@ -1,4 +1,4 @@
-import type { User } from '$lib/types/user';
+import type { User } from '$lib/types';
 
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
@@ -7,9 +7,21 @@ import type { User } from '$lib/types/user';
   
   export let open = false;
   
+  // Define the command item type
+  interface CommandItem {
+    id: string;
+    title: string;
+    description: string;
+    icon: any;
+    category: string;
+    href?: string;
+    shortcut?: string[];
+    action?: () => void;
+  }
+  
   const dispatch = createEventDispatcher<{
     close: void;
-    select: { item: any };
+    select: { item: CommandItem };
   }>();
   
   let searchInput: HTMLInputElement;
@@ -23,7 +35,7 @@ import type { User } from '$lib/types/user';
       )
     : allItems;
   
-  const allItems = [
+  const allItems: CommandItem[] = [
     // Navigation
     {
       id: 'nav-dashboard',
@@ -187,12 +199,13 @@ import type { User } from '$lib/types/user';
         <div class="max-h-96 overflow-y-auto">
           {#if filteredItems.length > 0}
             {#each Object.entries(
-              filteredItems.reduce((acc, item) => {
+              filteredItems.reduce((acc: Record<string, CommandItem[]>, item) => {
                 if (!acc[item.category]) acc[item.category] = [];
                 acc[item.category].push(item);
                 return acc;
               }, {})
-            ) as [category, items], categoryIndex}
+            ) as entry, categoryIndex}
+              {@const [category, items] = entry as [string, CommandItem[]]}
               
               <div class="px-2 py-2">
                 <h3 class="px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">

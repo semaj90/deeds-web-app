@@ -2,6 +2,8 @@ import { json } from "@sveltejs/kit";
 import VectorService from "$lib/server/services/vector-service";
 import type { RequestHandler } from "./$types";
 
+const vectorService = new VectorService();
+
 interface EmbedRequest {
   text: string;
   type: "user_context" | "chat_message" | "evidence" | "case_summary";

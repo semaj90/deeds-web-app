@@ -109,7 +109,7 @@
 		<!-- Backdrop -->
 		<div
 			class="container mx-auto px-4"
-			aria-hidden="true "
+			aria-hidden="true"
 		></div>
 
 		<!-- Modal Content -->

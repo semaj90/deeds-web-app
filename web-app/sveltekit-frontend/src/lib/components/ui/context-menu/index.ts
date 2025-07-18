@@ -1,14 +1,16 @@
-export { default as Root } from "./context-menu-root.svelte";
-export { default as Trigger } from "./context-menu-trigger.svelte";
-export { default as Content } from "./context-menu-content.svelte";
-export { default as Item } from "./context-menu-item.svelte";
-export { default as Separator } from "./context-menu-separator.svelte";
+import Root from "./context-menu-root.svelte";
+import Trigger from "./context-menu-trigger.svelte";
+import Content from "./context-menu-content.svelte";
+import Item from "./context-menu-item.svelte";
+import Separator from "./context-menu-separator.svelte";
+
+export { Root, Trigger, Content, Item, Separator };
 
 // Re-export as namespace for convenience
 export const ContextMenu = {
-  Root: Root,
-  Trigger: Trigger,
-  Content: Content,
-  Item: Item,
-  Separator: Separator,
+  Root,
+  Trigger,
+  Content,
+  Item,
+  Separator,
 };

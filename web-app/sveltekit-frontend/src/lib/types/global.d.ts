@@ -48,6 +48,7 @@ export interface SelectContext {
 // AI Service types
 export interface AIResponse {
   content: string;
+  sources?: any[];
   confidence?: number;
   tokens?: number;
   model?: string;

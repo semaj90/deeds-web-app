@@ -2,8 +2,8 @@ import { evidence } from "$lib/server/db/schema-postgres";
 import type { RequestHandler } from "@sveltejs/kit";
 import { json } from "@sveltejs/kit";
 import { randomUUID } from "crypto";
-import { existsSync } from "fs";
-import { mkdir, writeFile } from "fs/promises";
+import { existsSync, createReadStream } from "fs";
+import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
 import { db } from "$lib/server/db/index";
 
@@ -184,8 +184,8 @@ export const GET: RequestHandler = async ({ url }) => {
       return new Response("File not found", { status: 404 });
     }
     // Read and serve file
-    const file = Bun.file(fullPath);
-    return new Response(file);
+    const fileContent = await readFile(fullPath);
+    return new Response(fileContent);
   } catch (error) {
     console.error("File serve error:", error);
     return new Response("Failed to serve file", { status: 500 });

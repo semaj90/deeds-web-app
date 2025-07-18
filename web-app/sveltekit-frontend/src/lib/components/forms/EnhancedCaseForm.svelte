@@ -1,6 +1,6 @@
 import type { Case } from '$lib/types';
 
-import type { User } from '$lib/types/user';
+import type { User } from '$lib/types';
 
 
 <!-- Enhanced Case Form with proper schema mapping -->

@@ -319,7 +319,8 @@ export interface CollaborationState {
 }
 // AI-related types
 export interface AIResponse {
-  response: string;
+  content: string;
+  sources?: any[];
   confidence?: number;
   contextUsed?: any[];
   suggestions?: string[];
