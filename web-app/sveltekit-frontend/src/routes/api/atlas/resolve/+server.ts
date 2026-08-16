@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { ZodError } from 'zod';
+import { buildResolutionReceipt } from '$lib/server/atlas/receipts';
 import { getAtlasRuntime, resolveAtlasTaskEndToEnd } from '$lib/server/atlas/runtime';
 import { parseResolveTaskInput } from '$lib/server/atlas/validation';
 import type { RequestHandler } from './$types';
@@ -22,8 +23,9 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const result = await resolveAtlasTaskEndToEnd(input, runtime);
+    const receipt = buildResolutionReceipt(input, result);
     const httpStatus = result.resolution.fiber.status === 'REVISION_CONFLICT' ? 409 : 200;
-    return json(result, { status: httpStatus });
+    return json({ ...result, receipt }, { status: httpStatus });
   } catch (error) {
     if (error instanceof ZodError) {
       return json(
