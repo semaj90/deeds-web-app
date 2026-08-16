@@ -5,7 +5,11 @@ import { getAtlasRuntime, resolveAtlasTaskEndToEnd } from '$lib/server/atlas/run
 import { parseResolveTaskInput } from '$lib/server/atlas/validation';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+  if (!locals.user) {
+    return json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const input = parseResolveTaskInput(body);
