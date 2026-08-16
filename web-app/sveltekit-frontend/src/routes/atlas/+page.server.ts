@@ -14,6 +14,7 @@ import {
   db
 } from '$lib/server/db';
 import {
+  claimAtlasTask,
   createAtlasTask,
   decideAtlasApproval,
   transitionAtlasTask
@@ -59,17 +60,7 @@ export const load: PageServerLoad = async ({ locals }) => {
       db.select().from(atlasAuditEvents).orderBy(desc(atlasAuditEvents.createdAt)).limit(100)
     ]);
 
-  return {
-    tasks,
-    approvals,
-    agents,
-    incidents,
-    receipts,
-    skills,
-    evalRuns,
-    runtimeEndpoints,
-    audit
-  };
+  return { tasks, approvals, agents, incidents, receipts, skills, evalRuns, runtimeEndpoints, audit };
 };
 
 export const actions: Actions = {
@@ -98,6 +89,20 @@ export const actions: Actions = {
       }
     });
     return { created: true };
+  },
+
+  claimTask: async ({ request, locals }) => {
+    requireOperator(locals);
+    const form = await request.formData();
+    const taskId = String(form.get('taskId') ?? '');
+    const agentId = String(form.get('agentId') ?? '');
+    if (!taskId || !agentId) return fail(400, { taskError: 'Task and agent are required' });
+    try {
+      await claimAtlasTask(taskId, agentId);
+      return { claimed: true };
+    } catch (error) {
+      return fail(409, { taskError: error instanceof Error ? error.message : 'Claim failed' });
+    }
   },
 
   transitionTask: async ({ request, locals }) => {
