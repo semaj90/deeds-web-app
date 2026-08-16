@@ -3,17 +3,19 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as vectorSchema from "../database/vector-schema-simple";
 import * as atlasControlSchema from "./atlas-control-schema";
+import * as atlasLeaseSchema from "./atlas-lease-schema";
 import * as schema from "./unified-schema";
 
 // Database type helper - exported first to avoid temporal dead zone
 export const isPostgreSQL = true;
 
-// Combine all schemas. Atlas control-plane state is intentionally kept in a
-// separate module from the legacy monolithic application schema.
+// Combine all schemas. Atlas control-plane state is intentionally kept in
+// separate modules from the legacy monolithic application schema.
 export const fullSchema = {
   ...schema,
   ...vectorSchema,
   ...atlasControlSchema,
+  ...atlasLeaseSchema,
 };
 
 // Create the connection
@@ -32,6 +34,7 @@ export const migrationDb = drizzle(migrationClient);
 // Export all schemas and types
 export * from "../database/vector-schema-simple";
 export * from "./atlas-control-schema";
+export * from "./atlas-lease-schema";
 export * from "./unified-schema";
 
 // Helper function to test database connection
