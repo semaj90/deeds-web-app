@@ -11,8 +11,9 @@ export const ATLAS_ROUTE_BITS = {
 
 export type AtlasRouteFlag = keyof typeof ATLAS_ROUTE_BITS;
 export type AtlasRouteMask = number;
+export type RouteMaskInputV1 = Partial<Record<AtlasRouteFlag, boolean>>;
 
-export function buildRouteMask(flags: Partial<Record<AtlasRouteFlag, boolean>>): AtlasRouteMask {
+export function buildRouteMask(flags: RouteMaskInputV1): AtlasRouteMask {
   let mask = 0;
   for (const [flag, enabled] of Object.entries(flags) as Array<[AtlasRouteFlag, boolean | undefined]>) {
     if (enabled) mask |= ATLAS_ROUTE_BITS[flag];
