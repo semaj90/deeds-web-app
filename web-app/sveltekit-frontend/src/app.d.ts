@@ -1,5 +1,5 @@
 // See https://kit.svelte.dev/docs/types#app
-import type { User, UserSession } from "$lib/types/user";
+import type { Session, User } from "$lib/types/user";
 
 declare global {
   namespace App {
@@ -9,7 +9,7 @@ declare global {
     }
     interface Locals {
       user: User | null;
-      session: UserSession | null;
+      session: Session | null;
     }
     interface PageData {}
     interface Platform {}
