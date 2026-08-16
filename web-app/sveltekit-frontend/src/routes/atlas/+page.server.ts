@@ -7,8 +7,10 @@ import {
   atlasAuditEvents,
   atlasErrorIncidents,
   atlasEvalRuns,
+  atlasHeartbeatRuns,
   atlasRuntimeEndpoints,
   atlasSkills,
+  atlasTaskLeases,
   atlasTasks,
   atlasVerificationReceipts,
   db
@@ -19,6 +21,7 @@ import {
   decideAtlasApproval,
   transitionAtlasTask
 } from '$lib/server/atlas/task-manager';
+import { reclaimExpiredAtlasLeases } from '$lib/server/atlas/leases';
 import { isAtlasTaskStatus } from '$lib/server/atlas/task-state';
 
 function requireUser(locals: App.Locals) {
@@ -37,30 +40,55 @@ function requireOperator(locals: App.Locals) {
 export const load: PageServerLoad = async ({ locals }) => {
   requireUser(locals);
 
-  const [tasks, approvals, agents, incidents, receipts, skills, evalRuns, runtimeEndpoints, audit] =
-    await Promise.all([
-      db.select().from(atlasTasks).orderBy(desc(atlasTasks.updatedAt)).limit(100),
-      db
-        .select()
-        .from(atlasApprovals)
-        .where(inArray(atlasApprovals.status, ['pending', 'revision_requested']))
-        .orderBy(desc(atlasApprovals.createdAt))
-        .limit(100),
-      db.select().from(atlasAgents).orderBy(atlasAgents.name).limit(200),
-      db
-        .select()
-        .from(atlasErrorIncidents)
-        .where(inArray(atlasErrorIncidents.status, ['active', 'escalated']))
-        .orderBy(desc(atlasErrorIncidents.lastSeenAt))
-        .limit(100),
-      db.select().from(atlasVerificationReceipts).orderBy(desc(atlasVerificationReceipts.createdAt)).limit(100),
-      db.select().from(atlasSkills).orderBy(desc(atlasSkills.updatedAt)).limit(100),
-      db.select().from(atlasEvalRuns).orderBy(desc(atlasEvalRuns.createdAt)).limit(100),
-      db.select().from(atlasRuntimeEndpoints).orderBy(atlasRuntimeEndpoints.name).limit(100),
-      db.select().from(atlasAuditEvents).orderBy(desc(atlasAuditEvents.createdAt)).limit(100)
-    ]);
+  const [
+    tasks,
+    approvals,
+    agents,
+    incidents,
+    receipts,
+    skills,
+    evalRuns,
+    runtimeEndpoints,
+    leases,
+    heartbeatRuns,
+    audit
+  ] = await Promise.all([
+    db.select().from(atlasTasks).orderBy(desc(atlasTasks.updatedAt)).limit(100),
+    db
+      .select()
+      .from(atlasApprovals)
+      .where(eq(atlasApprovals.status, 'pending'))
+      .orderBy(desc(atlasApprovals.createdAt))
+      .limit(100),
+    db.select().from(atlasAgents).orderBy(atlasAgents.name).limit(200),
+    db
+      .select()
+      .from(atlasErrorIncidents)
+      .where(inArray(atlasErrorIncidents.status, ['active', 'escalated']))
+      .orderBy(desc(atlasErrorIncidents.lastSeenAt))
+      .limit(100),
+    db.select().from(atlasVerificationReceipts).orderBy(desc(atlasVerificationReceipts.createdAt)).limit(100),
+    db.select().from(atlasSkills).orderBy(desc(atlasSkills.updatedAt)).limit(100),
+    db.select().from(atlasEvalRuns).orderBy(desc(atlasEvalRuns.createdAt)).limit(100),
+    db.select().from(atlasRuntimeEndpoints).orderBy(atlasRuntimeEndpoints.name).limit(100),
+    db.select().from(atlasTaskLeases).orderBy(desc(atlasTaskLeases.updatedAt)).limit(100),
+    db.select().from(atlasHeartbeatRuns).orderBy(desc(atlasHeartbeatRuns.createdAt)).limit(100),
+    db.select().from(atlasAuditEvents).orderBy(desc(atlasAuditEvents.createdAt)).limit(100)
+  ]);
 
-  return { tasks, approvals, agents, incidents, receipts, skills, evalRuns, runtimeEndpoints, audit };
+  return {
+    tasks,
+    approvals,
+    agents,
+    incidents,
+    receipts,
+    skills,
+    evalRuns,
+    runtimeEndpoints,
+    leases,
+    heartbeatRuns,
+    audit
+  };
 };
 
 export const actions: Actions = {
@@ -71,15 +99,18 @@ export const actions: Actions = {
     const description = String(form.get('description') ?? '').trim();
     if (!intent) return fail(400, { createTaskError: 'Intent is required' });
 
+    const priority = Number(form.get('priority') ?? 50);
+    if (!Number.isFinite(priority)) return fail(400, { createTaskError: 'Priority must be numeric' });
+
     const taskKey = `atlas:${Date.now()}:${crypto.randomUUID()}`;
     await createAtlasTask({
       taskKey,
       intent,
       description: description || null,
-      priority: Number(form.get('priority') ?? 50),
+      priority,
       protocol: String(form.get('protocol') ?? 'internal'),
       approvalRequired: form.get('approvalRequired') === 'on',
-      verificationRequired: form.get('verificationRequired') !== 'off',
+      verificationRequired: form.get('verificationRequired') === 'on',
       createdByUserId: user.id,
       resourceEnvelope: {
         maxCandidates: 256,
@@ -98,6 +129,8 @@ export const actions: Actions = {
     const agentId = String(form.get('agentId') ?? '');
     if (!taskId || !agentId) return fail(400, { taskError: 'Task and agent are required' });
     try {
+      // Dashboard claims are administrative assignment only. Autonomous workers
+      // must use the lease endpoint so execution ownership expires and can recover.
       await claimAtlasTask(taskId, agentId);
       return { claimed: true };
     } catch (error) {
@@ -205,5 +238,19 @@ export const actions: Actions = {
       entityId: endpointId
     });
     return { runtimeUpdated: true };
+  },
+
+  reclaimExpiredLeases: async ({ locals }) => {
+    const user = requireOperator(locals);
+    const reclaimed = await reclaimExpiredAtlasLeases(100);
+    await db.insert(atlasAuditEvents).values({
+      actorType: 'user',
+      actorId: user.id,
+      action: 'task.lease.reclaim_expired',
+      entityType: 'atlas_control_plane',
+      entityId: 'leases',
+      details: { reclaimedTaskIds: reclaimed }
+    });
+    return { reclaimedLeaseCount: reclaimed.length };
   }
 };
