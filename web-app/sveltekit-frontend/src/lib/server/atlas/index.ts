@@ -1,3 +1,4 @@
+export * from './bootstrap';
 export * from './budget';
 export * from './challengers';
 export * from './context-manifest';
@@ -10,6 +11,8 @@ export * from './locality';
 export * from './mutation';
 export * from './proof';
 export * from './receipts';
+export * from './remote-executor';
+export * from './remote-proof';
 export * from './resolver';
 export * from './route-mask';
 export * from './runtime';
