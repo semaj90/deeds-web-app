@@ -8,7 +8,6 @@ import type {
   AtlasLane,
   AtlasResolutionResultV1,
   AtlasResolutionStatus,
-  AtlasRevisionSet,
   CandidateEvidenceV1,
   CandidateExpansionV1,
   CandidateV1,
@@ -18,6 +17,7 @@ import type {
   ResolveTaskInputV1,
   ResourceUsageV1
 } from './contracts';
+import { auditCandidateProofs, validateExactPromotion } from './proof';
 import { canonicalSetDelta, isStableDelta } from './stability';
 
 export interface AtlasResolverDependencies {
@@ -32,15 +32,6 @@ const DEFAULT_INITIAL_CANDIDATES = 32;
 const DEFAULT_GROWTH_FACTOR = 2;
 const DEFAULT_DELTA_THRESHOLD = 0.05;
 const DEFAULT_STABLE_ROUNDS = 1;
-
-function sameRevisions(a: AtlasRevisionSet, b: AtlasRevisionSet): boolean {
-  return (
-    a.workspace === b.workspace &&
-    a.source === b.source &&
-    a.graph === b.graph &&
-    a.feature === b.feature
-  );
-}
 
 function mergeEvidence(a: CandidateEvidenceV1, b: CandidateEvidenceV1): CandidateEvidenceV1 {
   return { ...a, ...b };
@@ -82,11 +73,15 @@ function mergeUsageWithoutCandidateDoubleCount(
   };
 }
 
-function toolOrTimeBoundary(
-  input: ResolveTaskInputV1,
-  usage: ResourceUsageV1
-): boolean {
-  return usage.toolCalls >= input.budget.maxToolCalls || usage.wallMs >= input.budget.maxWallMs;
+/** Candidate count is a search-width cap, not a reason to prevent exact promotion. */
+function blockingOperationReasons(input: ResolveTaskInputV1, usage: ResourceUsageV1): string[] {
+  return resourceBoundaryReasons(input.budget, usage).filter((reason) =>
+    ['VRAM_BUDGET', 'CONTEXT_TOKEN_BUDGET', 'TOOL_CALL_BUDGET', 'WALL_TIME_BUDGET'].includes(reason)
+  );
+}
+
+function operationBlocked(input: ResolveTaskInputV1, usage: ResourceUsageV1): boolean {
+  return blockingOperationReasons(input, usage).length > 0;
 }
 
 function uniqueReasons(reasons: string[]): string[] {
@@ -105,12 +100,22 @@ function assertUniqueLogicalLanes(lanes: readonly AtlasLane[]): void {
   }
 }
 
+function sanitizeProposal(lane: AtlasLane, candidates: readonly CandidateV1[]): CandidateV1[] {
+  const clean: CandidateV1[] = [];
+  for (const candidate of candidates) {
+    if (!candidate.canonicalId.trim()) continue;
+    if (!Number.isFinite(candidate.score)) continue;
+    clean.push({ ...candidate, lane: candidate.lane ?? lane.name });
+  }
+  return clean;
+}
+
 /**
  * Bounded, progressively expanding Parent Atlas resolver.
  *
- * It distinguishes observed candidate stability from exact promotion. Reaching
- * a finite resource boundary is surfaced as BOUNDARY_EXHAUSTED rather than
- * being misreported as proof that no other candidate exists.
+ * Observed stability is not proof. Exact promotion is accepted only when its
+ * canonical ID belongs to the current fiber, was actually verified, links
+ * evidence when required, and emits a receipt checksum.
  */
 export async function resolveAtlasTask(
   input: ResolveTaskInputV1,
@@ -126,7 +131,6 @@ export async function resolveAtlasTask(
 
   const maxCandidates = Math.max(0, Math.floor(input.budget.maxCandidates));
   if (maxCandidates === 0) {
-    boundaryReasons.push('CANDIDATE_BUDGET');
     return {
       fiber: {
         requestId: input.requestId,
@@ -139,7 +143,7 @@ export async function resolveAtlasTask(
         unresolvedRevisionCandidateIds: []
       },
       usage,
-      diagnostics: { boundaryReasons, hyperedgeCount: 0 }
+      diagnostics: { boundaryReasons: ['CANDIDATE_BUDGET'], hyperedgeCount: 0 }
     };
   }
 
@@ -171,8 +175,9 @@ export async function resolveAtlasTask(
 
   while (true) {
     usage = withWallTime(usage, now() - startedAt);
-    if (toolOrTimeBoundary(input, usage)) {
-      boundaryReasons.push(...resourceBoundaryReasons(input.budget, usage));
+    const preRoundBlocks = blockingOperationReasons(input, usage);
+    if (preRoundBlocks.length > 0) {
+      boundaryReasons.push(...preRoundBlocks);
       break;
     }
 
@@ -181,9 +186,10 @@ export async function resolveAtlasTask(
 
     for (const lane of dependencies.lanes) {
       usage = withWallTime(usage, now() - startedAt);
-      if (toolOrTimeBoundary(input, usage)) {
+      const preLaneBlocks = blockingOperationReasons(input, usage);
+      if (preLaneBlocks.length > 0) {
         partialRound = true;
-        boundaryReasons.push(...resourceBoundaryReasons(input.budget, usage));
+        boundaryReasons.push(...preLaneBlocks);
         break;
       }
 
@@ -193,15 +199,27 @@ export async function resolveAtlasTask(
         usage
       });
 
+      if (proposal.lane !== lane.name) {
+        throw new Error(`Atlas lane '${lane.name}' returned proposal for '${proposal.lane}'.`);
+      }
+
       usage = addResourceUsage(usage, { toolCalls: 1 });
       usage = mergeUsageWithoutCandidateDoubleCount(usage, proposal.usage ?? {});
 
-      for (const candidate of proposal.candidates) {
+      const postLaneBlocks = blockingOperationReasons(input, usage);
+      if (postLaneBlocks.length > 0) {
+        boundaryReasons.push(...postLaneBlocks);
+        partialRound = true;
+      }
+
+      for (const candidate of sanitizeProposal(lane, proposal.candidates)) {
         byCanonicalId.set(
           candidate.canonicalId,
           mergeCandidate(byCanonicalId.get(candidate.canonicalId), candidate)
         );
       }
+
+      if (partialRound) break;
     }
 
     candidates = rank([...byCanonicalId.values()]).slice(0, candidateLimit);
@@ -244,16 +262,17 @@ export async function resolveAtlasTask(
   }
 
   usage = withWallTime(usage, now() - startedAt);
-
-  const unresolvedRevisionCandidateIds = candidates
-    .filter((candidate) => !sameRevisions(candidate.revisions, input.revisions))
-    .map((candidate) => candidate.canonicalId);
+  const proofAudit = auditCandidateProofs(input, candidates);
+  const unresolvedRevisionCandidateIds = proofAudit.revisionConflicts;
 
   let status: AtlasResolutionStatus;
-  if (input.requirements.revisionQualified && unresolvedRevisionCandidateIds.length > 0) {
+  if (input.requirements.revisionQualified && proofAudit.revisionConflicts.length > 0) {
     status = 'REVISION_CONFLICT';
   } else if (!stable) {
     status = 'BOUNDARY_EXHAUSTED';
+  } else if (input.requirements.evidenceLinked && proofAudit.evidenceMissing.length > 0) {
+    status = 'AMBIGUOUS';
+    boundaryReasons.push(...proofAudit.evidenceMissing.map((id) => `EVIDENCE_MISSING:${id}`));
   } else {
     status = 'STABLE_APPROXIMATION';
   }
@@ -261,9 +280,10 @@ export async function resolveAtlasTask(
   let hyperedgeCount = 0;
   if (
     stable &&
-    status !== 'REVISION_CONFLICT' &&
+    status === 'STABLE_APPROXIMATION' &&
     dependencies.hyperedgeExpander &&
-    !toolOrTimeBoundary(input, usage)
+    input.budget.maxHyperedges > 0 &&
+    !operationBlocked(input, usage)
   ) {
     const expansion = await dependencies.hyperedgeExpander.expand(input, candidates, usage);
     usage = addResourceUsage(usage, { toolCalls: 1 });
@@ -280,29 +300,46 @@ export async function resolveAtlasTask(
   let exactPromotion: ExactPromotionResultV1 | undefined;
   if (
     stable &&
-    status !== 'REVISION_CONFLICT' &&
+    status === 'STABLE_APPROXIMATION' &&
     input.requirements.exactPromotion &&
     dependencies.exactPromoter &&
-    !toolOrTimeBoundary(input, usage)
+    !operationBlocked(input, usage)
   ) {
     exactPromotion = await dependencies.exactPromoter.verify(input, candidates, usage);
     usage = addResourceUsage(usage, { toolCalls: 1 });
     usage = mergeUsageWithoutCandidateDoubleCount(usage, exactPromotion.usage ?? {});
 
-    if (exactPromotion.decision === 'PROVEN') status = 'PROVEN';
-    if (exactPromotion.decision === 'AMBIGUOUS') status = 'AMBIGUOUS';
-  } else if (stable && input.requirements.exactPromotion && !dependencies.exactPromoter) {
+    const rejected = validateExactPromotion(exactPromotion, candidates, input.requirements);
+    if (rejected.length > 0) {
+      boundaryReasons.push(...rejected);
+      status = 'AMBIGUOUS';
+    } else if (exactPromotion.decision === 'PROVEN') {
+      status = 'PROVEN';
+    } else if (exactPromotion.decision === 'AMBIGUOUS') {
+      status = 'AMBIGUOUS';
+    }
+  } else if (
+    stable &&
+    status === 'STABLE_APPROXIMATION' &&
+    input.requirements.exactPromotion &&
+    !dependencies.exactPromoter
+  ) {
     boundaryReasons.push('EXACT_PROMOTER_UNAVAILABLE');
   }
 
   usage = withWallTime(usage, now() - startedAt);
-  const reached = resourceBoundaryReasons(input.budget, usage).filter(
-    (reason) => reason !== 'CANDIDATE_BUDGET' || !stable
+  boundaryReasons.push(
+    ...resourceBoundaryReasons(input.budget, usage).filter(
+      (reason) => reason !== 'CANDIDATE_BUDGET' || !stable
+    )
   );
-  boundaryReasons.push(...reached);
   boundaryReasons = uniqueReasons(boundaryReasons);
 
-  if (status === 'STABLE_APPROXIMATION' && toolOrTimeBoundary(input, usage) && input.requirements.exactPromotion) {
+  if (
+    status === 'STABLE_APPROXIMATION' &&
+    input.requirements.exactPromotion &&
+    (operationBlocked(input, usage) || !dependencies.exactPromoter)
+  ) {
     status = 'BOUNDARY_EXHAUSTED';
   }
 
