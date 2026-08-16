@@ -5,11 +5,14 @@ import type {
   CandidateV1,
   ResolveTaskInputV1
 } from '../src/lib/server/atlas/contracts';
+import { buildContextManifest } from '../src/lib/server/atlas/context-manifest';
 import { projectHyperedgesToWeightedEdges } from '../src/lib/server/atlas/hypergraph';
 import { decodeKBestLineages } from '../src/lib/server/atlas/lineage';
 import { resolveAtlasTask } from '../src/lib/server/atlas/resolver';
 import { buildRouteMask, routeHammingDistance } from '../src/lib/server/atlas/route-mask';
+import { resolveAtlasTaskEndToEnd } from '../src/lib/server/atlas/runtime';
 import { canonicalSetDelta } from '../src/lib/server/atlas/stability';
+import { resolveTaskInputSchema } from '../src/lib/server/atlas/validation';
 
 const revisions: AtlasRevisionSet = {
   workspace: 'w1',
@@ -24,6 +27,7 @@ function candidate(canonicalId: string, score: number, patch: Partial<CandidateV
     score,
     evidence: { semantic: score },
     revisions,
+    evidenceRefs: [`evidence:${canonicalId}`],
     ...patch
   };
 }
@@ -136,6 +140,36 @@ test('resolver promotes only after observed stabilization and exact verification
   expect(result.fiber.stabilizationDelta).toBe(0);
 });
 
+test('resolver rejects malformed exact promotion instead of asserting proof', async () => {
+  const lane: AtlasLane = {
+    name: 'semantic',
+    async propose() {
+      return { lane: 'semantic', candidates: [candidate('a', 0.9)] };
+    }
+  };
+
+  const request = input(2);
+  request.stabilization = { initialCandidateLimit: 1, growthFactor: 2, deltaThreshold: 0 };
+
+  const result = await resolveAtlasTask(request, {
+    lanes: [lane],
+    exactPromoter: {
+      async verify() {
+        return {
+          decision: 'PROVEN',
+          canonicalId: 'not-in-fiber',
+          verifiedCandidateIds: ['not-in-fiber'],
+          evidenceRefs: [],
+          receiptChecksum: undefined
+        };
+      }
+    }
+  });
+
+  expect(result.fiber.status).toBe('AMBIGUOUS');
+  expect(result.diagnostics.boundaryReasons).toContain('PROMOTION_CANONICAL_ID_OUTSIDE_FIBER');
+});
+
 test('resolver reports boundary exhaustion when candidate set still changes at cap', async () => {
   const lane: AtlasLane = {
     name: 'semantic',
@@ -163,4 +197,72 @@ test('resolver refuses duplicate logical lanes to prevent executor vote inflatio
   await expect(resolveAtlasTask(input(), { lanes: [lane, lane] })).rejects.toThrow(
     /Duplicate logical Atlas lane/
   );
+});
+
+test('request schema rejects impossible initial candidate width', () => {
+  const request = input(4);
+  request.stabilization = { initialCandidateLimit: 8 };
+  expect(resolveTaskInputSchema.safeParse(request).success).toBeFalsy();
+});
+
+test('end-to-end resolver emits bounded ContextManifest and route mask', async () => {
+  const lane: AtlasLane = {
+    name: 'semantic',
+    async propose() {
+      return { lane: 'semantic', candidates: [candidate('a', 0.9)] };
+    }
+  };
+
+  const request = input(2);
+  request.stabilization = { initialCandidateLimit: 1, growthFactor: 2, deltaThreshold: 0 };
+
+  const result = await resolveAtlasTaskEndToEnd(request, {
+    lanes: [lane],
+    exactPromoter: {
+      async verify(_request, candidates) {
+        return {
+          decision: 'PROVEN',
+          canonicalId: candidates[0].canonicalId,
+          verifiedCandidateIds: [candidates[0].canonicalId],
+          evidenceRefs: ['exact:a'],
+          receiptChecksum: 'receipt-a'
+        };
+      }
+    }
+  });
+
+  expect(result.schema).toBe('atlas.resolve-result.v1');
+  expect(result.contextManifest.status).toBe('PROVEN');
+  expect(result.contextManifest.candidates[0].canonicalId).toBe('a');
+  expect(result.routeMask).toBeGreaterThan(0);
+});
+
+test('context manifest truncates deterministically at token budget', () => {
+  const request = input(2);
+  request.budget.maxContextTokens = 8;
+  const manifest = buildContextManifest(request, {
+    fiber: {
+      requestId: request.requestId,
+      candidates: [candidate('a'.repeat(100), 1)],
+      multiplicity: 1,
+      stable: true,
+      status: 'STABLE_APPROXIMATION',
+      revisions,
+      expansions: [],
+      unresolvedRevisionCandidateIds: []
+    },
+    usage: {
+      vramBytes: 0,
+      contextTokens: 0,
+      candidateCount: 1,
+      graphHops: 0,
+      hyperedges: 0,
+      toolCalls: 1,
+      wallMs: 1
+    },
+    diagnostics: { boundaryReasons: [], hyperedgeCount: 0 }
+  });
+
+  expect(manifest.truncated).toBeTruthy();
+  expect(manifest.candidates).toHaveLength(0);
 });
