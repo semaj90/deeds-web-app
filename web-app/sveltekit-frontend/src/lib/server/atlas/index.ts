@@ -1,4 +1,5 @@
 export * from './agent-adapters';
+export * from './agent-manager';
 export * from './bootstrap';
 export * from './budget';
 export * from './challengers';
