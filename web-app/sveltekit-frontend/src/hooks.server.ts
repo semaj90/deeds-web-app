@@ -1,5 +1,9 @@
 import { lucia } from "$lib/server/auth";
+import { bootstrapAtlasRuntimeFromEnv } from "$lib/server/atlas/bootstrap";
 import type { Handle } from "@sveltejs/kit";
+
+// Safe no-op unless explicit ATLAS_*_EXECUTOR_URL values are configured.
+bootstrapAtlasRuntimeFromEnv();
 
 export const handle: Handle = async ({ event, resolve }) => {
   const sessionId = event.cookies.get(lucia.sessionCookieName);
