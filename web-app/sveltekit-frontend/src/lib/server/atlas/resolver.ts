@@ -13,6 +13,7 @@ import type {
   CandidateExpansionV1,
   CandidateV1,
   ExactPromoter,
+  ExactPromotionResultV1,
   HyperedgeExpander,
   ResolveTaskInputV1,
   ResourceUsageV1
@@ -276,7 +277,7 @@ export async function resolveAtlasTask(
     }
   }
 
-  let exactPromotion;
+  let exactPromotion: ExactPromotionResultV1 | undefined;
   if (
     stable &&
     status !== 'REVISION_CONFLICT' &&
