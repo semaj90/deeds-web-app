@@ -6,10 +6,11 @@ dotenv.config({ path: "./.env" });
 export default {
   schema: [
     "./src/lib/server/db/unified-schema.ts",
+    "./src/lib/server/db/atlas-control-schema.ts",
     "./src/lib/server/database/vector-schema-simple.ts",
   ],
   out: "./drizzle",
-  dialect: "postgresql", // Changed from driver: 'pg' to dialect: 'postgresql'
+  dialect: "postgresql",
   dbCredentials: {
     url:
       process.env.DATABASE_URL ||
