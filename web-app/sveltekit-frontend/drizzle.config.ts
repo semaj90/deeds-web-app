@@ -9,6 +9,7 @@ export default {
     './src/lib/server/db/atlas-control-schema.ts',
     './src/lib/server/db/atlas-lease-schema.ts',
     './src/lib/server/db/atlas-runtime-schema.ts',
+    './src/lib/server/db/atlas-workflow-schema.ts',
     './src/lib/server/database/vector-schema-simple.ts'
   ],
   out: './drizzle',

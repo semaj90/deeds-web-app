@@ -5,19 +5,21 @@ import * as vectorSchema from '../database/vector-schema-simple';
 import * as atlasControlSchema from './atlas-control-schema';
 import * as atlasLeaseSchema from './atlas-lease-schema';
 import * as atlasRuntimeSchema from './atlas-runtime-schema';
+import * as atlasWorkflowSchema from './atlas-workflow-schema';
 import * as schema from './unified-schema';
 
 // Database type helper - exported first to avoid temporal dead zone
 export const isPostgreSQL = true;
 
-// Combine all schemas. Atlas control-plane/runtime state is intentionally kept
-// in separate modules from the legacy monolithic application schema.
+// Combine all schemas. Atlas control-plane/runtime/workflow state is intentionally
+// kept in separate modules from the legacy monolithic application schema.
 export const fullSchema = {
   ...schema,
   ...vectorSchema,
   ...atlasControlSchema,
   ...atlasLeaseSchema,
-  ...atlasRuntimeSchema
+  ...atlasRuntimeSchema,
+  ...atlasWorkflowSchema
 };
 
 // Create the connection
@@ -38,6 +40,7 @@ export * from '../database/vector-schema-simple';
 export * from './atlas-control-schema';
 export * from './atlas-lease-schema';
 export * from './atlas-runtime-schema';
+export * from './atlas-workflow-schema';
 export * from './unified-schema';
 
 // Helper function to test database connection

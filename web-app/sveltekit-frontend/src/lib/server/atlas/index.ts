@@ -26,3 +26,6 @@ export * from './task-manager';
 export * from './task-state';
 export * from './transport';
 export * from './validation';
+export * from './workflow-event';
+export * from './workflow-store';
+export * from './workflow-transport';
