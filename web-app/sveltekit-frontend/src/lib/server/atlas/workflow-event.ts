@@ -62,22 +62,18 @@ export const WORKFLOW_VISUAL_ANIMATIONS = [
 
 export interface WorkflowActionEventV1 {
   schema: 'atlas.workflow-action.v1';
-
   workflowId: string;
   workflowRevision: number;
   sequence: number;
-
   actionId: string;
   parentActionId?: string;
   dagNodeId: string;
   attempt: number;
-
   lane: WorkflowLane;
   transport?: WorkflowTransport;
   kind: WorkflowEventKind;
   state: WorkflowActionState;
   operation: string;
-
   progress?: {
     completedUnits?: number;
     totalUnits?: number;
@@ -85,23 +81,16 @@ export interface WorkflowActionEventV1 {
     etaMs?: number;
     confidence?: number;
   };
-
   target?: {
     canonicalId?: string;
     resource?: string;
   };
-
   evidenceRefs?: string[];
   artifactRefs?: string[];
-
   startedAt?: string;
   emittedAt: string;
   finishedAt?: string;
-
-  /**
-   * Optional presentation hint only. It must never be used to infer workflow
-   * truth, retries, DAG dependencies, evidence identity or durable status.
-   */
+  /** Presentation hint only; never canonical workflow truth. */
   visual?: {
     station: (typeof WORKFLOW_VISUAL_STATIONS)[number];
     animation: (typeof WORKFLOW_VISUAL_ANIMATIONS)[number];
@@ -111,7 +100,7 @@ export interface WorkflowActionEventV1 {
 
 export type WorkflowActionEventDraftV1 = Omit<
   WorkflowActionEventV1,
-  'schema' | 'workflowRevision' | 'sequence' | 'emittedAt'
+  'schema' | 'workflowId' | 'workflowRevision' | 'sequence' | 'emittedAt'
 > & {
   emittedAt?: string;
 };
@@ -183,7 +172,9 @@ export function parseWorkflowActionEvent(value: unknown): WorkflowActionEventV1 
   return workflowActionEventSchema.parse(value) as WorkflowActionEventV1;
 }
 
-export function workflowProgressPercent(event: Pick<WorkflowActionEventV1, 'progress' | 'state'>): number {
+export function workflowProgressPercent(
+  event: Pick<WorkflowActionEventV1, 'progress' | 'state'>
+): number {
   if (event.progress?.fraction !== undefined) return Math.round(event.progress.fraction * 100);
   if (
     event.progress?.completedUnits !== undefined &&
