@@ -27,6 +27,16 @@ export interface User {
   updatedAt: Date;
   hashedPassword?: string; // Only for backend use
 }
+
+/** Server-side authenticated session shape assigned by Lucia in hooks.server.ts. */
+export interface Session {
+  id: string;
+  userId: string;
+  fresh: boolean;
+  expiresAt: Date;
+}
+
+/** UI/auth payload retained for callers that also need embedded user metadata. */
 export interface UserSession {
   user: {
     id: string;

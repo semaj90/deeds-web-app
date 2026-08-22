@@ -1,22 +1,31 @@
 // Database connection and schema exports
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as vectorSchema from "../database/vector-schema-simple";
-import * as schema from "./unified-schema";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import * as vectorSchema from '../database/vector-schema-simple';
+import * as atlasControlSchema from './atlas-control-schema';
+import * as atlasLeaseSchema from './atlas-lease-schema';
+import * as atlasRuntimeSchema from './atlas-runtime-schema';
+import * as atlasWorkflowSchema from './atlas-workflow-schema';
+import * as schema from './unified-schema';
 
 // Database type helper - exported first to avoid temporal dead zone
 export const isPostgreSQL = true;
 
-// Combine all schemas
+// Combine all schemas. Atlas control-plane/runtime/workflow state is intentionally
+// kept in separate modules from the legacy monolithic application schema.
 export const fullSchema = {
   ...schema,
   ...vectorSchema,
+  ...atlasControlSchema,
+  ...atlasLeaseSchema,
+  ...atlasRuntimeSchema,
+  ...atlasWorkflowSchema
 };
 
 // Create the connection
 const connectionString =
   process.env.DATABASE_URL ||
-  "postgresql://postgres:postgres@localhost:5432/prosecutor_db";
+  'postgresql://postgres:postgres@localhost:5432/prosecutor_db';
 
 // For query purposes
 const queryClient = postgres(connectionString);
@@ -27,14 +36,18 @@ const migrationClient = postgres(connectionString, { max: 1 });
 export const migrationDb = drizzle(migrationClient);
 
 // Export all schemas and types
-export * from "../database/vector-schema-simple";
-export * from "./unified-schema";
+export * from '../database/vector-schema-simple';
+export * from './atlas-control-schema';
+export * from './atlas-lease-schema';
+export * from './atlas-runtime-schema';
+export * from './atlas-workflow-schema';
+export * from './unified-schema';
 
 // Helper function to test database connection
 export async function testConnection() {
   try {
     await queryClient`SELECT 1`;
-    console.log("✅ Database connection successful");
+    console.log('✅ Database connection successful');
 
     // Check for pgvector extension
     const result = await queryClient`
@@ -44,19 +57,20 @@ export async function testConnection() {
     `;
 
     if (result[0].has_vector) {
-      console.log("✅ pgvector extension is installed");
+      console.log('✅ pgvector extension is installed');
     } else {
-      console.log("⚠️  pgvector extension not found, installing...");
+      console.log('⚠️  pgvector extension not found, installing...');
       await queryClient`CREATE EXTENSION IF NOT EXISTS vector`;
-      console.log("✅ pgvector extension installed");
+      console.log('✅ pgvector extension installed');
     }
     return true;
   } catch (error) {
-    console.error("❌ Database connection failed:", error);
+    console.error('❌ Database connection failed:', error);
     return false;
   }
 }
+
 // Initialize pgvector on first run
-if (process.env.NODE_ENV !== "production") {
+if (process.env.NODE_ENV !== 'production') {
   testConnection().catch(console.error);
 }
